@@ -29,29 +29,37 @@ const App = () => {
   const [weatherData, setWeatherData] = useState(new Map());
   const [sliderValue, setSliderValue] = useState(0);
   const smallMap = useMap('smallMap');
+  const balloonsUrl = import.meta.env.DEV? "/balloonsApi/" : "https://corsproxy.io/?https://a.windbornesystems.com/treasure/";
+  const weatherUrl = import.meta.env.DEV? "/weatherApi" : "https://corsproxy.io/?https://api.open-meteo.com/v1/forecast";
 
   const fetchData = async () => {
-    const fetchedBalloons = new Map();
-    for (let num = 0; num < 24; num++) {
-      const fetchUrl = num < 10 ? `/balloonsApi/0${num.toString()}.json` : `/balloonsApi/${num.toString()}.json`;
+    try{
+      const fetchedBalloons = new Map();
+      const fetchPromises = [];
 
-      try {
-        const response = await fetch(fetchUrl);
-        if (response.ok) {
-          const data = await response.json();
-          data.forEach((balloon, index) => {
+      for (let num = 0; num < 24; num++) {
+        const fetchUrl = num < 10 ? `${balloonsUrl}0${num.toString()}.json` : `${balloonsUrl}${num.toString()}.json`;
+  
+        fetchPromises.push(
+          fetch(fetchUrl).then(response => response.ok ? response.json() : null)
+        );
+      }
+
+      const balloonArr = await Promise.all(fetchPromises);
+      balloonArr
+        .filter(data => data !== null)
+        .forEach((hourlyData) => {
+          for (const [index, balloon] of hourlyData.entries()){
             let newArr = fetchedBalloons.get(index) || [];
             newArr.push(balloon);
             fetchedBalloons.set(index, newArr);
-          });
-        } else {
-          console.error(`Error: ${response.status}`);
-        }
-      } catch (err) {
-        console.error(`Error: `, err)
-      }
+          }
+        });
+      
+      setBalloons(fetchedBalloons);
+    } catch (err) {
+      console.error(`Error `, err);
     }
-    setBalloons(fetchedBalloons);
   }
 
   const fetchWeatherData = useCallback(async (key) => {
@@ -66,7 +74,7 @@ const App = () => {
       for (let num = 0; num < 24; num++) {
         const lat = balloons.get(key)[num][0];
         const lng = balloons.get(key)[num][1];
-        const url = `/weatherApi?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,precipitation,wind_speed_10m&timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone}&past_days=1&forecast_days=1&wind_speed_unit=mph&temperature_unit=fahrenheit&precipitation_unit=inch`;
+        const url = `${weatherUrl}?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,precipitation,wind_speed_10m&timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone}&past_days=1&forecast_days=1&wind_speed_unit=mph&temperature_unit=fahrenheit&precipitation_unit=inch`;
 
         fetchPromises.push(
           fetch(url).then(response => response.ok ? response.json() : null)
